@@ -1,9 +1,14 @@
 import base64
 import requests
 import time
-from backend.beam_client import run_sam2_on_beam
+from beam_client import run_sam2_on_beam
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+
+import base64
+import asyncio
+import httpx  # Make sure you install this: pip install httpx
+from fastapi import UploadFile, File
 
 app = FastAPI()
 
@@ -26,30 +31,43 @@ BEAM_AUTH_HEADER = {
 
 @app.post("/segments")
 async def segments(file: UploadFile = File(...)):
-    # Read image as base64
-    print("reached backend ")
+    print("Reached backend")
+
+    # Read image and encode in base64
     image_bytes = await file.read()
     image_base64 = base64.b64encode(image_bytes).decode()
 
-    # Step 1: Send to Beam
-    response = requests.post(
-        BEAM_API_URL,
-        headers=BEAM_AUTH_HEADER,
-        json={"image_base64": image_base64},
-    )
-    task = response.json()
-    task_id = str(task["result"])
+    async with httpx.AsyncClient() as client:
+        # Step 1: Submit to Beam
+        response = await client.post(
+            BEAM_API_URL,
+            headers=BEAM_AUTH_HEADER,
+            json={"image_base64": image_base64},
+        )
 
-    # Step 2: Poll status
-    for _ in range(10):
-        time.sleep(2)
-        status_res = requests.get(BEAM_TASK_URL + task_id + "/", headers=BEAM_AUTH_HEADER)
-        status_data = status_res.json()
+        try:
+            task = response.json()
+        except Exception:
+            return {"error": "Beam API did not return JSON."}
 
-        if status_data.get("status") == "completed":
-            return status_data["result"]
-        elif status_data.get("status") == "failed":
-            return {"error": "Beam processing failed."}
+        task_id = str(task.get("result"))
+        if not task_id:
+            return {"error": "No task ID returned by Beam."}
+
+        # Step 2: Poll for result
+        for _ in range(10):
+            await asyncio.sleep(2)
+            status_res = await client.get(BEAM_TASK_URL + task_id + "/", headers=BEAM_AUTH_HEADER)
+
+            try:
+                status_data = status_res.json()
+            except Exception:
+                return {"error": "Invalid status response from Beam."}
+
+            if status_data.get("status") == "completed":
+                return status_data["result"]
+            elif status_data.get("status") == "failed":
+                return {"error": "Beam processing failed."}
 
     return {"error": "Beam did not complete in time."}
 

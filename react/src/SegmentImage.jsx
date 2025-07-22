@@ -18,7 +18,7 @@ const SegmentImage = () => {
 
   const checkTaskStatus = async (taskId) => {
   try {
-    const res = await fetch(`http://localhost:8000/task-status/${taskId}`);
+    const res = await fetch(`http://localhost:8050/task-status/${taskId}`);
     const data = await res.json();
     console.log("📥 Task status response:", data);
 
@@ -48,7 +48,7 @@ const SegmentImage = () => {
   formData.append("file", file); // key should match FastAPI's expected "file"
 
   try {
-    const res = await axios.post("http://localhost:8000/segments", formData, {
+    const res = await axios.post("http://localhost:8050/segments", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
