@@ -1,33 +1,26 @@
 import requests
-import imghdr
+import base64
+import json
+
+BEAM_URL = "https://inference-9a8cae6-v1.app.beam.cloud"
+BEAM_API_KEY = "9rK-Vb5cTqdCQvvvPLvvSIUJDMVztE40-VPp5rihcAoKJI3HRua-0DKFxSpAoyK1eeHMgXFUhVh3Fec0FqCWhg=="
 
 def run_sam2_on_beam(image_bytes: bytes):
-    AUTH_TOKEN = "9rK-Vb5cTqdCQvvvPLvvSIUJDMVztE40-VPp5rihcAoKJI3HRua-0DKFxSpAoyK1eeHMgXFUhVh3Fec0FqCWhg=="
-    BEAM_ENDPOINT = "https://inference-9a8cae6-v1.app.beam.cloud"  # Actual inference URL
+    print("Sending request to Beam...")
 
-    image_type = imghdr.what(None, h=image_bytes)
-    if image_type is None:
-        raise ValueError("Unsupported or corrupted image format")
-
-    mime_type = f'image/{image_type}'
-    file_extension = 'png' if image_type == 'png' else 'jpg'
-
-    files = {
-        'image': (f'image.{file_extension}', image_bytes, mime_type)
-    }
-
+    image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {"image_base64": image_b64}
     headers = {
-        "Authorization": f"Bearer {AUTH_TOKEN}"
+        "Authorization": f"Bearer {BEAM_API_KEY}",
+        "Content-Type": "application/json"
     }
 
-    # Try with just `/` as path
-    response = requests.post(
-        f"{BEAM_ENDPOINT}/",  # <-- the model might live at root path
-        headers=headers,
-        files=files
-    )
+    response = requests.post(BEAM_URL, headers=headers, data=json.dumps(payload))
+    print(f"Beam Response Status: {response.status_code}")
 
-    if response.status_code == 200:
+    if response.ok:
+        print("Beam responded successfully")
         return response.json()
     else:
-        raise Exception(f"Beam API error: {response.status_code} - {response.text}")
+        print("Beam error:", response.text)
+        response.raise_for_status()
